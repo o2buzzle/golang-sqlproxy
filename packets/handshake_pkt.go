@@ -1,4 +1,4 @@
-package main
+package packets
 
 import (
 	"bytes"
@@ -8,29 +8,6 @@ import (
 	"net"
 	"strings"
 )
-
-type mysql_packet_header struct {
-	length      uint32 // 3 bytes
-	sequence_id uint8  // 1 byte
-}
-
-type mysql_generic_packet struct {
-	header mysql_packet_header
-	data   []byte
-}
-
-func (r *mysql_generic_packet) dumpBytes() string {
-	return string(r.data)
-}
-
-func (r *mysql_generic_packet) string() string {
-	ret := ""
-	ret += fmt.Sprintf("length: %d\n", r.header.length)
-	ret += fmt.Sprintf("sequence_id: %d\n", r.header.sequence_id)
-	//ret += fmt.Sprintf("raw data: %v\n", r.data)
-	ret += fmt.Sprintf("data: %s\n", r.dumpBytes())
-	return ret
-}
 
 type CapabilityFlags uint32
 
@@ -107,8 +84,8 @@ func (r CapabilityFlags) String() string {
 	return strings.Join(names, "\n")
 }
 
-type mysql_handshake_packet struct {
-	header            mysql_packet_header
+type MySQLHandshakePacket struct {
+	header            MySQLPacketHeader
 	ProtocolVersion   uint8
 	ServerVersion     []byte
 	ConnectionId      uint32
@@ -123,14 +100,14 @@ type mysql_handshake_packet struct {
 
 // Decode decodes the first packet received from the MySQl Server
 // It's a handshake packet
-func (r *mysql_handshake_packet) Decode(conn net.Conn) error {
+func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 	data := make([]byte, 1024)
 	_, err := conn.Read(data)
 	if err != nil {
 		return err
 	}
 
-	header := &mysql_packet_header{}
+	header := &MySQLPacketHeader{}
 	ln := []byte{data[0], data[1], data[2], 0x00}
 	header.length = binary.LittleEndian.Uint32(ln)
 	// a single byte integer is the same in BigEndian and LittleEndian
@@ -248,7 +225,7 @@ func (r *mysql_handshake_packet) Decode(conn net.Conn) error {
 }
 
 // Encode encodes the InitialHandshakePacket to bytes
-func (r mysql_handshake_packet) Encode() ([]byte, error) {
+func (r MySQLHandshakePacket) Encode() ([]byte, error) {
 	buf := make([]byte, 0)
 	buf = append(buf, r.ProtocolVersion)
 	buf = append(buf, r.ServerVersion...)
@@ -284,7 +261,7 @@ func (r mysql_handshake_packet) Encode() ([]byte, error) {
 	buf = append(buf, r.AuthPluginName...)
 	buf = append(buf, 0x00)
 
-	h := mysql_packet_header{
+	h := MySQLPacketHeader{
 		length:      uint32(len(buf)),
 		sequence_id: r.header.sequence_id,
 	}
@@ -308,40 +285,12 @@ func Max(a, b int) int {
 	return b
 }
 
-func (r mysql_handshake_packet) String() string {
+func (r MySQLHandshakePacket) String() string {
 	return "Handshake pkt"
 }
 
-/*
-4              capability flags, CLIENT_PROTOCOL_41 always set
-4              max-packet size
-1              character set
-string[23]     reserved (all [0])
-string[NUL]    username
-if capabilities & CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA {
-lenenc-int     length of auth-response
-string[n]      auth-response
-} else if capabilities & CLIENT_SECURE_CONNECTION {
-1              length of auth-response
-string[n]      auth-response
-} else {
-string[NUL]    auth-response
-}
-if capabilities & CLIENT_CONNECT_WITH_DB {
-string[NUL]    database
-}
-if capabilities & CLIENT_PLUGIN_AUTH {
-string[NUL]    auth plugin name
-}
-if capabilities & CLIENT_CONNECT_ATTRS {
-lenenc-int     length of all key-values
-lenenc-str     key
-lenenc-str     value
-if-more data in 'length of all key-values', more keys and value pairs
-}
-*/
-type mysql_auth_packet struct {
-	header          mysql_packet_header
+type MySQLAuthPacket struct {
+	header          MySQLPacketHeader
 	CapabilityFlags CapabilityFlags
 	CharacterSet    byte
 	MaxPacketSize   uint32
@@ -354,14 +303,14 @@ type mysql_auth_packet struct {
 	ConnectAttrs    []byte
 }
 
-func (r *mysql_auth_packet) Decode(conn net.Conn) error {
+func (r *MySQLAuthPacket) Decode(conn net.Conn) error {
 	data := make([]byte, 1024)
 	_, err := conn.Read(data)
 	if err != nil {
 		return err
 	}
 
-	header := &mysql_packet_header{}
+	header := &MySQLPacketHeader{}
 	ln := []byte{data[0], data[1], data[2], 0x00}
 	header.length = binary.LittleEndian.Uint32(ln)
 	// a single byte integer is the same in BigEndian and LittleEndian
@@ -429,7 +378,7 @@ func (r *mysql_auth_packet) Decode(conn net.Conn) error {
 	return nil
 }
 
-func (r *mysql_auth_packet) Encode() ([]byte, error) {
+func (r *MySQLAuthPacket) Encode() ([]byte, error) {
 	buf := make([]byte, 0, 1024)
 
 	cap := make([]byte, 4)
@@ -483,7 +432,7 @@ func (r *mysql_auth_packet) Encode() ([]byte, error) {
 		buf = append(buf, r.ConnectAttrs...)
 	}
 
-	h := mysql_packet_header{
+	h := MySQLPacketHeader{
 		length:      uint32(len(buf)),
 		sequence_id: r.header.sequence_id,
 	}
@@ -498,6 +447,6 @@ func (r *mysql_auth_packet) Encode() ([]byte, error) {
 	return new_buf, nil
 }
 
-func (r *mysql_auth_packet) String() string {
+func (r *MySQLAuthPacket) String() string {
 	return fmt.Sprintf("User: %s", r.Username)
 }

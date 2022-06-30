@@ -1,10 +1,11 @@
-package main
+package proxy
 
 import (
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"o2buzzle/sqlproxy/packets"
 )
 
 func NewConnection(host string, port string, conn net.Conn, id uint64) *Connection {
@@ -32,7 +33,7 @@ func (r *Connection) Handle() error {
 		log.Printf("Failed to connection to MySQL: [%d] %s", r.id, err.Error())
 		return err
 	}
-	handshake_pkt := &mysql_handshake_packet{}
+	handshake_pkt := &packets.MySQLHandshakePacket{}
 	err = handshake_pkt.Decode(mysql)
 	if err != nil {
 		log.Printf("Failed to decode handshake packet: [%d] %s", r.id, err.Error())
@@ -51,7 +52,7 @@ func (r *Connection) Handle() error {
 		return err
 	}
 
-	handshake_auth_pkt := &mysql_auth_packet{}
+	handshake_auth_pkt := &packets.MySQLAuthPacket{}
 	err = handshake_auth_pkt.Decode(r.conn)
 	if err != nil {
 		log.Printf("Failed to decode handshake auth packet: [%d] %s", r.id, err.Error())
@@ -82,7 +83,7 @@ func (r *Connection) Handle() error {
 				return
 			}
 			log.Default().Printf("MySQL --> %s:\n", proxy_user)
-			decode_packets(buf[:n])
+			packets.DecodePackets(buf[:n], false)
 			r.conn.Write(buf[:n])
 		}
 	}()
@@ -100,8 +101,13 @@ func (r *Connection) Handle() error {
 				return
 			}
 			log.Default().Printf("%s --> MySQL:\n", proxy_user)
-			decode_packets(buf[:n])
-			mysql.Write(buf[:n])
+			packets.DecodePackets(buf[:n], true)
+			new_buf, err := packets.InjectUser(buf[:n], true, proxy_user)
+			if err != nil {
+				log.Printf("Failed to inject user: [%d] %s", r.id, err.Error())
+				return
+			}
+			mysql.Write(new_buf)
 		}
 	}()
 
