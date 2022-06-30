@@ -6,16 +6,20 @@ import (
 	"net"
 )
 
-func NewProxy(host, port string) *Proxy {
+func NewProxy(host, port, p_uname, p_pass string) *Proxy {
 	return &Proxy{
-		host: host,
-		port: port,
+		host:        host,
+		port:        port,
+		proxy_uname: p_uname,
+		proxy_pass:  p_pass,
 	}
 }
 
 type Proxy struct {
 	host         string
 	port         string
+	proxy_uname  string
+	proxy_pass   string
 	connectionId uint64
 }
 
@@ -39,7 +43,7 @@ func (r *Proxy) Start(port string) error {
 }
 
 func (r *Proxy) handle(conn net.Conn, connectionId uint64) {
-	connection := NewConnection(r.host, r.port, conn, connectionId)
+	connection := NewConnection(r.host, r.port, conn, connectionId, r.proxy_uname, r.proxy_pass)
 	err := connection.Handle()
 	if err != nil {
 		log.Printf("Error handling proxy connection: %s", err.Error())

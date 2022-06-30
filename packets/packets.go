@@ -63,6 +63,7 @@ func DecodePackets(packets []byte, direction bool) {
 		packet_seq = append(packet_seq, packet)
 		i += 4 + int(header.length)
 	}
+	fmt.Printf("%d packets\n", len(packet_seq))
 	for _, packet := range packet_seq {
 		if direction {
 			magic := packet.data[0]

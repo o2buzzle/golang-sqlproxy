@@ -1,0 +1,7 @@
+{
+    "accounts":{
+        "sampleuser": "samplepassword",
+        "sampleuser2": "samplepassword2",
+        "sampleuser3": "samplepassword3"
+    }
+}

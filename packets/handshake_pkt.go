@@ -98,8 +98,6 @@ type MySQLHandshakePacket struct {
 	AuthPluginName    []byte
 }
 
-// Decode decodes the first packet received from the MySQl Server
-// It's a handshake packet
 func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 	data := make([]byte, 1024)
 	_, err := conn.Read(data)
@@ -110,19 +108,13 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 	header := &MySQLPacketHeader{}
 	ln := []byte{data[0], data[1], data[2], 0x00}
 	header.length = binary.LittleEndian.Uint32(ln)
-	// a single byte integer is the same in BigEndian and LittleEndian
 	header.sequence_id = data[3]
 
 	r.header = *header
-	/**
-	Assign payload only data to new var just  for convenience
-	*/
+
 	payload := data[4 : header.length+4]
 	position := 0
-	/**
-	As defined in the documentation, this value is alway 10 (0x00 in hex)
-	1	[0a] protocol version
-	*/
+
 	r.ProtocolVersion = payload[0]
 	if r.ProtocolVersion != 0x0a {
 		return errors.New("non supported protocol for the proxy. Only version 10 is supported")
@@ -130,11 +122,6 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 
 	position += 1
 
-	/**
-	Extract server version, by finding the terminal character (0x00) index,
-	and extracting the data in between
-	string[NUL]    server version
-	*/
 	index := bytes.IndexByte(payload, byte(0x00))
 	r.ServerVersion = payload[position:index]
 	position = index + 1
@@ -143,10 +130,6 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 	id := binary.LittleEndian.Uint32(connectionId)
 	r.ConnectionId = id
 	position += 4
-
-	/*
-		The auth-plugin-data is the concatenation of strings auth-plugin-data-part-1 and auth-plugin-data-part-2.
-	*/
 
 	r.AuthPluginData = make([]byte, 8)
 	copy(r.AuthPluginData, payload[position:position+8])
@@ -172,10 +155,6 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 	capabilityFlags2 := payload[position : position+2]
 	position += 2
 
-	/**
-	Reconstruct 32 bit integer from two 16 bit integers.
-	Take low 2 bytes and high 2 bytes, ans sum it.
-	*/
 	capLow := binary.LittleEndian.Uint16(capabilitiesFlags1)
 	capHi := binary.LittleEndian.Uint16(capabilityFlags2)
 	cap := uint32(capLow) | uint32(capHi)<<16
@@ -189,21 +168,9 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 		}
 	}
 
-	/*
-		Skip reserved bytes
-		string[10]     reserved (all [00])
-	*/
-
 	position += 1 + 10
 
-	/**
-	This flag tell us that the client should hash the password using algorithm described here:
-	https://dev.mysql.com/doc/internals/en/secure-password-authentication.html#packet-Authentication::Native41
-	*/
 	if r.CapabilitiesFlags&clientSecureConn != 0 {
-		/*
-			The auth-plugin-data is the concatenation of strings auth-plugin-data-part-1 and auth-plugin-data-part-2.
-		*/
 		end := position + Max(13, int(r.AuthPluginDataLen)-8)
 		r.AuthPluginData = append(r.AuthPluginData, payload[position:end]...)
 		position = end
@@ -211,10 +178,6 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 
 	index = bytes.IndexByte(payload[position:], byte(0x00))
 
-	/*
-		Due to Bug#59453 the auth-plugin-name is missing the terminating NUL-char in versions prior to 5.5.10 and 5.6.2.
-		We know the length of the payload, so if there is no NUL-char, just read all the data until the end
-	*/
 	if index != -1 {
 		r.AuthPluginName = payload[position : position+index]
 	} else {
@@ -224,7 +187,6 @@ func (r *MySQLHandshakePacket) Decode(conn net.Conn) error {
 	return nil
 }
 
-// Encode encodes the InitialHandshakePacket to bytes
 func (r MySQLHandshakePacket) Encode() ([]byte, error) {
 	buf := make([]byte, 0)
 	buf = append(buf, r.ProtocolVersion)
